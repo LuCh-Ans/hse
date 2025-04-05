@@ -1,0 +1,192 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h> 
+#include <string.h>
+
+char** field;//игровое поле
+char*** his;//история для отслеживания циклов
+int width, height;//параметры игрового поля
+int history_size = 0;
+int max_history = 1000;
+
+//функция для вывода поля
+void print_field() {
+    system("clear");
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            printf("%c", field[i][j]);
+        }
+        printf("\n");
+    }
+}
+
+//функция подсчета живых соседних клеток
+int neighbours_count(int i, int j) {
+    int neighbours = 0;
+    int i_ex = i - 1, i_nx = i + 1, j_ex = j - 1, j_nx = j + 1;
+    if (i_ex < 0) i_ex = height - 1;
+    if (j_ex < 0) j_ex = width - 1;
+    if (i_nx > height - 1) i_nx = 0;
+    if (j_nx > width - 1) j_nx = 0;
+
+    if (field[i_ex][j_ex] == '#') neighbours++;
+    if (field[i_ex][j] == '#') neighbours++;
+    if (field[i_ex][j_nx] == '#') neighbours++;
+    if (field[i_nx][j_ex] == '#') neighbours++;
+    if (field[i_nx][j] == '#') neighbours++;
+    if (field[i_nx][j_nx] == '#') neighbours++;
+    if (field[i][j_nx] == '#') neighbours++;
+    if (field[i][j_ex] == '#') neighbours++;
+
+    return neighbours;
+}
+
+//функция обновления поля
+int update_field() {
+    char** new_gen = (char**)malloc(height * sizeof(char*));
+    for (int i = 0; i < height; i++) {
+        new_gen[i] = (char*)malloc(width * sizeof(char));
+        memcpy(new_gen[i], field[i], width);
+    }
+
+    int changes = 0;
+
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            int neighbors = neighbours_count(i, j);
+
+            if (field[i][j] == '#') {
+                if (neighbors != 2 && neighbors != 3) {
+                    new_gen[i][j] = '.';
+                    changes = 1;
+                }
+            }
+            else {
+                if (neighbors == 3) {
+                    new_gen[i][j] = '#';
+                    changes = 1;
+                }
+            }
+        }
+    }
+
+    for (int i = 0; i < history_size; i++) {
+        int conf_repeat = 1;
+        for (int j = 0; j < height; j++) {
+            for (int k = 0; k < width; k++) {
+                if (his[i][j][k] != new_gen[j][k]) {
+                    conf_repeat = 0;
+                    break;
+                }
+            }
+            if (!conf_repeat) break;
+        }
+        if (conf_repeat) {
+            free(new_gen);
+            return 2;
+        }
+    }
+
+    if (history_size < max_history) {
+        for (int i = 0; i < height; i++) {
+            memcpy(his[history_size][i], new_gen[i], width);
+        }
+        history_size++;
+    }
+
+    for (int i = 0; i < height; i++) {
+        memcpy(field[i], new_gen[i], width);
+        free(new_gen[i]);
+    }
+    free(new_gen);
+
+    return changes ? 0 : 1;
+}
+
+int live_cells() {
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            if (field[i][j] == '#') {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+int main(int count_arg, char* arguments[]) {
+    if (count_arg == 3) {
+        width = atoi(arguments[1]);
+        height = atoi(arguments[2]);
+    }
+    else {
+        printf("Enter width and height \n");
+        scanf(" %d", &width);
+        scanf(" %d", &height);
+    }
+
+    field = (char**)malloc(height * sizeof(char*));
+    for (int i = 0; i < height; i++) {
+        field[i] = (char*)malloc(width * sizeof(char));
+    }
+
+    printf("Enter configuration of the field\n");
+    printf("Use # if cell is alife and . if it is dead\n");
+    for (int i = 0; i < height; i++) {
+        for (int j = 0; j < width; j++) {
+            printf("cell[%d][%d]: ", i, j);
+            scanf(" %c", &field[i][j]);
+            //field[i][j] = (rand() % 2 == 0) ? '.' : '#';
+        }
+    }
+
+    his = (char***)malloc(max_history * sizeof(char**));
+    for (int i = 0; i < max_history; i++) {
+        his[i] = (char**)malloc(height * sizeof(char*));
+        for (int j = 0; j < height; j++) {
+            his[i][j] = (char*)malloc(width * sizeof(char));
+        }
+    }
+
+    for (int i = 0; i < height; i++) {
+        memcpy(his[history_size][i], field[i], width);
+    }
+    history_size++;
+
+
+    while (1) {
+        print_field();
+
+        int configuration_check = update_field();
+
+        if (!live_cells()) {
+            printf("Game over\nAll the cells are dead\n");
+            break;
+        }
+        if (configuration_check == 2) {
+            printf("Game over\nConfiguration repeats\n");
+            break;
+        }
+        if (configuration_check == 1) {
+            printf("Game over\nStable configuration reached\n");
+            break;
+        }
+
+        sleep(2);
+    }
+
+    for (int i = 0; i < max_history; i++) {
+        for (int j = 0; j < height; j++) {
+            free(his[i][j]);
+        }
+        free(his[i]);
+    }
+    free(his);
+
+    for (int i = 0; i < height; i++) {
+        free(field[i]);
+    }
+    free(field);
+
+    return 0;
+}
